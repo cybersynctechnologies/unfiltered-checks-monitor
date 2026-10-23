@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '17 * * * *' # every hour
   workflow_dispatch:
+    inputs:
+      force_research:
+        description: Run the video ideas research now, even if it ran in the last 20 hours
+        type: boolean
+        default: false
   push:
     branches: [main]
 
@@ -35,6 +40,8 @@ jobs:
       - name: Research similar Shorts (daily)
         run: node research.mjs
         continue-on-error: true
+        env:
+          FORCE: ${{ inputs.force_research && '1' || '' }}
 
       - name: Save snapshot
         run: |
