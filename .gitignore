@@ -1,0 +1,4 @@
+logs/
+*.plist
+.DS_Store
+node_modules/

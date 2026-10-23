@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#121211" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f4f3f0" media="(prefers-color-scheme: light)">
+  <title>Unfiltered Checks Monitor</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1>Unfiltered Checks</h1>
+      <p class="sub">
+        <a href="https://www.youtube.com/@UnfilteredChecks" target="_blank" rel="noopener">@UnfilteredChecks</a>
+        · <span id="last-checked">loading…</span>
+      </p>
+    </div>
+    <div class="actions">
+      <button type="button" id="refresh">Refresh</button>
+      <p class="note" id="refresh-status">Channel stats are checked automatically every hour.</p>
+    </div>
+  </header>
+
+  <main>
+    <div id="empty" class="empty" hidden></div>
+
+    <section class="tiles" id="tiles"></section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Subscribers against forecast</h2>
+        <p class="legend">
+          <span class="item"><span class="key key-actual"></span>Actual</span>
+          <span class="item"><span class="key key-band"></span>Forecast range (2,000 to 3,000 by 23 Dec)</span>
+        </p>
+      </div>
+      <div class="chart" id="subs-chart"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Total channel views</h2>
+      </div>
+      <div class="chart" id="views-chart"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Latest Shorts</h2>
+        <p class="legend">The 15 most recent uploads. "Last 24h" fills in after a day of checks.</p>
+      </div>
+      <div class="table-wrap">
+        <table id="uploads">
+          <thead>
+            <tr>
+              <th>Short</th>
+              <th class="wide">Posted</th>
+              <th class="num">Views</th>
+              <th class="num">Last 24h</th>
+              <th class="num wide">Views / hour</th>
+              <th class="num wide">Likes</th>
+              <th class="num">Like rate</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div class="tooltip" id="tooltip" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
