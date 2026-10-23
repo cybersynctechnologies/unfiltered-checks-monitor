@@ -26,7 +26,17 @@
   <main>
     <div id="empty" class="empty" hidden></div>
 
+    <div id="breakout" class="callout" hidden></div>
+
     <section class="tiles" id="tiles"></section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>What's working: topics</h2>
+        <p class="legend">Average views per Short, grouped by theme from the titles.</p>
+      </div>
+      <div id="topics"></div>
+    </section>
 
     <section class="card">
       <div class="card-head">
@@ -57,6 +67,7 @@
             <tr>
               <th>Short</th>
               <th class="wide">Posted</th>
+              <th class="wide">Pace</th>
               <th class="num">Views</th>
               <th class="num">Last 24h</th>
               <th class="num wide">Views / hour</th>
@@ -67,6 +78,14 @@
           <tbody></tbody>
         </table>
       </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Video ideas: similar Shorts doing well this month</h2>
+        <p class="legend" id="ideas-note">Shorts from other channels in the same niche, ranked by views per day. Refreshed daily.</p>
+      </div>
+      <div class="ideas" id="ideas"></div>
     </section>
   </main>
 

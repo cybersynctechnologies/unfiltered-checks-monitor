@@ -16,6 +16,7 @@ const FILES = {
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
   '/data/snapshots.json': ['data/snapshots.json', 'application/json; charset=utf-8'],
+  '/data/research.json': ['data/research.json', 'application/json; charset=utf-8'],
 };
 
 let running = null;

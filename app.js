@@ -11,7 +11,66 @@ const fmtDateTime = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 's
 
 let snaps = [];
 let videos = {};
+let research = null;
 let FORECAST;
+
+// Themes from his titles, checked in order (first match wins). Research topics use the same names.
+const TOPICS = [
+  { name: 'What if', re: /\bwhat\s+if\b/i },
+  { name: 'Mind-bending scenarios', re: /escape|survive|shrink|hole through/i },
+  { name: 'Aliens and the unknown', re: /alien|ufo|afraid|mystery/i },
+  { name: 'Space and planets', re: /moon|sun\b|venus|mars|planet|space|astronaut|galaxy|star|earth|black hole/i },
+  { name: 'History and people', re: /samurai|ninja|history|war\b|ever lived|ancient/i },
+  { name: 'Human body and mind', re: /brain|body|human|poop|sleep/i },
+];
+const topicOf = (title) => TOPICS.find((t) => t.re.test(title))?.name ?? 'Other';
+
+function median(values) {
+  if (!values.length) return 0;
+  const s = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+// Most recent known [views, likes] for every Short we've ever seen in the feed.
+function latestStats() {
+  const out = new Map();
+  for (const s of snaps) for (const [id, views, likes] of s.u) out.set(id, { views, likes });
+  return out;
+}
+
+// What a normal Short of his gets in its first 24 hours. Uses our own hourly history once at least
+// three Shorts have been tracked from launch; until then, the median of his older Shorts' totals.
+function paceBenchmark(stats, now) {
+  const at24 = [];
+  for (const [id, meta] of Object.entries(videos)) {
+    const target = Date.parse(meta.published) + DAY;
+    let best = null;
+    for (const s of snaps) {
+      if (Math.abs(s.time - target) > 4 * HOUR) continue;
+      const row = s.u.find((r) => r[0] === id);
+      if (row && (!best || Math.abs(s.time - target) < Math.abs(best.time - target))) best = { time: s.time, views: row[1] };
+    }
+    if (best) at24.push(best.views);
+  }
+  if (at24.length >= 3) return { views: median(at24), basis: 'first-day views' };
+  const older = [...stats].filter(([id]) => videos[id] && now - Date.parse(videos[id].published) > 3 * DAY).map(([, s]) => s.views);
+  return { views: median(older), basis: 'typical total views' };
+}
+
+// Pace of one Short against the benchmark: young Shorts are scaled by age, so a 6-hour-old Short
+// isn't compared with a full day. "Breaking out" is only for Shorts under three days old; older
+// ones that did well are labelled "Hit".
+function paceOf(views, ageMs, bench) {
+  if (!bench.views) return null;
+  const young = ageMs < 3 * DAY;
+  const expected = bench.views * Math.min(1, Math.max(0.15, ageMs / DAY));
+  const ratio = views / expected;
+  if (ratio >= 2) return { ratio, label: young ? 'Breaking out' : 'Hit', icon: '▲▲', cls: 'hot' };
+  if (ratio >= 1.2) return { ratio, label: 'Above usual', icon: '▲', cls: 'good' };
+  if (ratio <= 0.5) return { ratio, label: young ? 'Slow start' : 'Below usual', icon: '▼', cls: 'slow' };
+  return { ratio, label: 'Normal', icon: '●', cls: 'normal' };
+}
 
 // Forecast made on 23 Oct 2026: 2,000 to 3,000 subscribers by 23 Dec if daily Shorts continue.
 // The range starts from the first snapshot so day one isn't judged against a line that began at midnight.
@@ -174,20 +233,27 @@ function compact(v) {
   return new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(v);
 }
 
+function badge(pace) {
+  return pace ? `<span class="badge ${pace.cls}" title="${pace.ratio.toFixed(1)}× his usual pace">${pace.icon} ${pace.label}</span>` : '';
+}
+
 function renderUploads(last) {
   const dayAgo = snapshotBefore(last.time, 20 * HOUR);
   const before = new Map((dayAgo?.u ?? []).map(([id, views]) => [id, views]));
+  const bench = paceBenchmark(latestStats(), last.time);
   const rows = last.u.map(([id, views, likes]) => {
     const meta = videos[id] ?? { title: id, published: last.t };
     const posted = Date.parse(meta.published);
     const hours = Math.max(1, (last.time - posted) / HOUR);
+    const pace = badge(paceOf(views, last.time - posted, bench));
     const gained = before.has(id) ? signed(views - before.get(id)) : '<span class="muted">—</span>';
     const likeRate = likes && views ? `${((likes / views) * 100).toFixed(1)}%` : '<span class="muted">—</span>';
     const likesCell = likes ? fmt.format(likes) : '<span class="muted" title="Likes hidden or none">0</span>';
     return `<tr>
       <td class="title"><a href="https://www.youtube.com/shorts/${id}" target="_blank" rel="noopener">${escapeHtml(meta.title)}</a>
-        <div class="posted">${fmtDateTime.format(posted)}</div></td>
+        <div class="posted">${fmtDateTime.format(posted)} ${pace}</div></td>
       <td class="wide">${fmtDateTime.format(posted)}</td>
+      <td class="wide">${pace}</td>
       <td class="num">${fmt.format(views)}</td>
       <td class="num">${gained}</td>
       <td class="num wide">${fmt.format(Math.round(views / hours))}</td>
@@ -196,6 +262,80 @@ function renderUploads(last) {
     </tr>`;
   });
   document.querySelector('#uploads tbody').innerHTML = rows.join('');
+}
+
+// Callout for any Short under three days old that is running at twice his usual pace or more.
+function renderBreakout(last) {
+  const bench = paceBenchmark(latestStats(), last.time);
+  const hot = last.u
+    .map(([id, views]) => ({ id, views, meta: videos[id] }))
+    .filter((v) => v.meta && last.time - Date.parse(v.meta.published) < 3 * DAY)
+    .map((v) => ({ ...v, pace: paceOf(v.views, last.time - Date.parse(v.meta.published), bench) }))
+    .filter((v) => v.pace?.cls === 'hot')
+    .sort((a, b) => b.pace.ratio - a.pace.ratio);
+  const el = document.getElementById('breakout');
+  if (!hot.length) return;
+  const v = hot[0];
+  el.hidden = false;
+  el.innerHTML = `<strong>▲▲ Breaking out:</strong>
+    <a href="https://www.youtube.com/shorts/${v.id}" target="_blank" rel="noopener">${escapeHtml(v.meta.title)}</a>
+    has ${fmt.format(v.views)} views, about ${v.pace.ratio.toFixed(1)}× his usual pace (${bench.basis}).
+    A follow-up or part 2 on the same idea while it's hot is worth it.`;
+}
+
+function renderTopics() {
+  const stats = latestStats();
+  const groups = new Map();
+  for (const [id, { views }] of stats) {
+    const meta = videos[id];
+    if (!meta) continue;
+    const name = topicOf(meta.title);
+    if (!groups.has(name)) groups.set(name, []);
+    groups.get(name).push({ id, views, title: meta.title });
+  }
+  const rows = [...groups]
+    .map(([name, list]) => ({
+      name,
+      count: list.length,
+      avg: list.reduce((a, v) => a + v.views, 0) / list.length,
+      best: list.reduce((a, v) => (v.views > a.views ? v : a)),
+    }))
+    .sort((a, b) => b.avg - a.avg);
+  const max = Math.max(...rows.map((r) => r.avg), 1);
+  document.getElementById('topics').innerHTML = rows.map((r) => `
+    <div class="topic">
+      <div class="topic-head">
+        <span class="topic-name">${r.name}</span>
+        <span class="topic-val">${fmt.format(Math.round(r.avg))} avg · ${r.count} Short${r.count > 1 ? 's' : ''}</span>
+      </div>
+      <div class="bar"><span style="width:${(r.avg / max) * 100}%"></span></div>
+      <div class="topic-best">Best: <a href="https://www.youtube.com/shorts/${r.best.id}" target="_blank" rel="noopener">${escapeHtml(r.best.title)}</a> (${fmt.format(r.best.views)})</div>
+    </div>`).join('');
+}
+
+const cleanTitle = (t) => t.replace(/#[\p{L}\p{N}_]+/gu, '').replace(/\s*\|\s*$/, '').replace(/\s{2,}/g, ' ').trim();
+
+function renderIdeas() {
+  const el = document.getElementById('ideas');
+  if (!research?.videos?.length) {
+    el.innerHTML = '<p class="muted">The first round of research will appear after the next daily run.</p>';
+    return;
+  }
+  document.getElementById('ideas-note').textContent =
+    `Shorts from other channels in the same niche, ranked by views per day. Researched ${fmtDateTime.format(Date.parse(research.t))}, refreshed daily.`;
+  const now = Date.parse(research.t);
+  el.innerHTML = research.videos.map((v) => {
+    const days = Math.max(1, Math.round((now - Date.parse(v.published)) / DAY));
+    return `<a class="idea" href="https://www.youtube.com/shorts/${v.id}" target="_blank" rel="noopener">
+      <span class="thumb"><img loading="lazy" src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg" alt=""></span>
+      <span class="idea-body">
+        <span class="chip">${escapeHtml(v.topic)}</span>
+        <span class="idea-title">${escapeHtml(cleanTitle(v.title) || v.title)}</span>
+        <span class="idea-meta">${escapeHtml(v.channel || 'Unknown channel')}</span>
+        <span class="idea-meta"><strong>${fmt.format(v.viewsPerDay)}/day</strong> · ${fmt.format(v.views)} views · ${days}d ago</span>
+      </span>
+    </a>`;
+  }).join('');
 }
 
 function render() {
@@ -224,6 +364,9 @@ function render() {
   });
 
   renderUploads(last);
+  renderBreakout(last);
+  renderTopics();
+  renderIdeas();
 }
 
 async function load() {
@@ -234,6 +377,11 @@ async function load() {
     snaps = (data.snapshots ?? []).map((s) => ({ ...s, time: Date.parse(s.t) }));
   } catch {
     snaps = [];
+  }
+  try {
+    research = await (await fetch(`data/research.json?t=${Date.now()}`, { cache: 'no-store' })).json();
+  } catch {
+    research = null;
   }
   setForecast();
   if (!snaps.length) {

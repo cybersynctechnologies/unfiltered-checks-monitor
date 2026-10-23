@@ -32,16 +32,20 @@ jobs:
       - name: Take snapshot
         run: node collect.mjs
 
+      - name: Research similar Shorts (daily)
+        run: node research.mjs
+        continue-on-error: true
+
       - name: Save snapshot
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/snapshots.json
+          git add data/snapshots.json data/research.json
           git diff --cached --quiet || git commit -m "Snapshot $(date -u +%Y-%m-%dT%H:%MZ)"
           git push
 
       - name: Prepare site
-        run: mkdir -p _site/data && cp index.html style.css app.js _site/ && cp data/snapshots.json _site/data/
+        run: mkdir -p _site/data && cp index.html style.css app.js _site/ && cp data/snapshots.json data/research.json _site/data/
 
       - uses: actions/upload-pages-artifact@v3
         with:
