@@ -79,13 +79,19 @@ async function searchShorts({ topic, q }) {
 async function details(id) {
   const html = await get(`https://www.youtube.com/watch?v=${id}`);
   const pick = (re) => html.match(re)?.[1];
-  return {
-    channel: JSON.parse(`"${pick(/"ownerChannelName":"((?:[^"\\]|\\.)*)"/) ?? ''}"`),
-    channelId: pick(/"channelId":"(UC[^"]+)"/),
-    published: pick(/"publishDate":"([^"]+)"/),
-    lengthSeconds: Number(pick(/"lengthSeconds":"(\d+)"/) ?? 0),
-    views: Number(pick(/"viewCount":"(\d+)"/) ?? 0),
-  };
+  const published = pick(/"publishDate":"([^"]+)"/);
+  if (published) {
+    return {
+      channel: JSON.parse(`"${pick(/"ownerChannelName":"((?:[^"\\]|\\.)*)"/) ?? ''}"`),
+      channelId: pick(/"channelId":"(UC[^"]+)"/),
+      published,
+      views: Number(pick(/"viewCount":"(\d+)"/) ?? 0),
+    };
+  }
+  // GitHub's servers often get a sign-in wall instead of the watch page. oEmbed still gives the
+  // channel; the upload date stays unknown (the search filter already limits results to this month).
+  const o = JSON.parse(await get(`https://www.youtube.com/oembed?url=https://www.youtube.com/shorts/${id}&format=json`));
+  return { channel: o.author_name, channelId: o.author_url, published: null, views: 0 };
 }
 
 async function main() {
@@ -119,8 +125,9 @@ async function main() {
     try {
       const d = await details(c.id);
       await sleep(1e3);
-      if (d.channelId === OWN_CHANNEL_ID || !d.published) continue;
-      const ageDays = Math.max(0.5, (now - Date.parse(d.published)) / 86400e3);
+      if (d.channelId === OWN_CHANNEL_ID || /@UnfilteredChecks$/i.test(d.channelId ?? '')) continue;
+      // Unknown upload date: assume mid-month, since results are filtered to this month.
+      const ageDays = d.published ? Math.max(0.5, (now - Date.parse(d.published)) / 86400e3) : 15;
       const views = d.views || c.views;
       videos.push({ ...c, ...d, views, viewsPerDay: Math.round(views / ageDays) });
     } catch (err) {
@@ -137,6 +144,10 @@ async function main() {
     return n < 2;
   }).slice(0, KEEP);
 
+  if (!picks.length) {
+    console.error('research: nothing usable came back, keeping the previous ideas');
+    return;
+  }
   await writeFile(OUT_FILE, JSON.stringify({ t: new Date().toISOString(), queries: QUERIES, videos: picks }));
   console.log(`research: ${seen.size} Shorts found, ${videos.length} checked, ${picks.length} kept`);
 }

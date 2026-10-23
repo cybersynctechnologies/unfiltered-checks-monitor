@@ -325,14 +325,14 @@ function renderIdeas() {
     `Shorts from other channels in the same niche, ranked by views per day. Researched ${fmtDateTime.format(Date.parse(research.t))}, refreshed daily.`;
   const now = Date.parse(research.t);
   el.innerHTML = research.videos.map((v) => {
-    const days = Math.max(1, Math.round((now - Date.parse(v.published)) / DAY));
+    const age = v.published ? `${Math.max(1, Math.round((now - Date.parse(v.published)) / DAY))}d ago` : 'this month';
     return `<a class="idea" href="https://www.youtube.com/shorts/${v.id}" target="_blank" rel="noopener">
       <span class="thumb"><img loading="lazy" src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg" alt=""></span>
       <span class="idea-body">
         <span class="chip">${escapeHtml(v.topic)}</span>
         <span class="idea-title">${escapeHtml(cleanTitle(v.title) || v.title)}</span>
         <span class="idea-meta">${escapeHtml(v.channel || 'Unknown channel')}</span>
-        <span class="idea-meta"><strong>${fmt.format(v.viewsPerDay)}/day</strong> · ${fmt.format(v.views)} views · ${days}d ago</span>
+        <span class="idea-meta"><strong>${fmt.format(v.viewsPerDay)}/day</strong> · ${fmt.format(v.views)} views · ${age}</span>
       </span>
     </a>`;
   }).join('');
